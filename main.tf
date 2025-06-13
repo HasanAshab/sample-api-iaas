@@ -12,54 +12,59 @@ provider "azurerm" {
   features {}
 }
 
-resource "azurerm_resource_group" "rg" {
-  name     = "portfolio-prod-centralindia-sampleapi-RG"
-  location = "Central India"
+variable "location" {
+  description = "Location of all resources"
 }
 
-resource "azurerm_subnet" "subnet" {
+resource "azurerm_resource_group" "rg" {
+  name     = "rg"
+  location = var.location
+}
+
+resource "azurerm_virtual_network" "vnet" {
+  name                = "vnet"
+  address_space       = ["10.0.0.0/21"]
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+}
+
+resource "azurerm_subnet" "internal" {
   name                 = "internal"
   resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = "portfolio-prod-centralindia-sampleapi-VNET"
-  address_prefixes     = ["237.84.2.178/24"]
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.2.0/24"]
 }
-resource "azurerm_network_interface" "nic" {
-  name                = "portfolio-prod-centralindia-sampleapi-NIC"
-  location            = "Central India"
-  resource_group_name = azurerm_resource_group.rg.name
 
+resource "azurerm_network_interface" "nic" {
+  name                = "nic"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = azurerm_subnet.subnet.id
+    subnet_id                     = azurerm_subnet.internal.id
     private_ip_address_allocation = "Dynamic"
   }
 }
 
-
-resource "azurerm_virtual_machine" "vm" {
-  name = "portfolio-prod-centralindia-sampleapi"
-  location = "Central India"
-  vm_size = "Standard_D2s_v3"
+resource "azurerm_linux_virtual_machine" "web" {
+  name                = "web"
   resource_group_name = azurerm_resource_group.rg.name
-  storage_os_disk {
-    name              = "myosdisk1"
-    caching           = "ReadWrite"
-    create_option     = "FromImage"
-    managed_disk_type = "Standard_LRS"
+  location            = azurerm_resource_group.rg.location
+  size                = "Standard_D2s_v3"
+  admin_username      = "azureuser"
+  network_interface_ids = [
+    azurerm_virtual_network.vnet.id
+  ]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
   }
-  network_interface_ids = [azurerm_network_interface.nic.id]
-  storage_image_reference {
+
+  source_image_reference {
     publisher = "Canonical"
-    offer     = "UbuntuServer"
-    sku       = "18.04-LTS"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "minimal-arm64"
     version   = "latest"
-  }
-  os_profile {
-    computer_name  = "myvm"
-    admin_username = "azureuser"
-    admin_password = "Password1234!"
-  }
-  os_profile_linux_config {
-    disable_password_authentication = false
   }
 }

@@ -44,6 +44,14 @@ resource "azurerm_public_ip" "management" {
   sku                 = "Standard"
 }
 
+resource "azurerm_public_ip" "appgw" {
+  name                = "appgw-ip"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
 resource "azurerm_virtual_network" "vnet" {
   name                = "vnet"
   address_space       = ["10.0.0.0/21"]
@@ -70,6 +78,13 @@ resource "azurerm_subnet" "management" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.2.128/26"]
+}
+
+resource "azurerm_subnet" "appgw" {
+  name                 = "AppGatewaySubnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.3.0/24"]
 }
 
 resource "azurerm_firewall" "default" {
@@ -110,12 +125,6 @@ resource "azurerm_firewall_nat_rule_collection" "default" {
   }
 }
 
-# resource "azurerm_firewall_policy" "example" {
-#   name                = "firewall-policy"
-#   resource_group_name = azurerm_resource_group.rg.name
-#   location            = azurerm_resource_group.rg.location
-# }
-
 resource "azurerm_network_interface" "nic" {
   name                = "nic"
   resource_group_name = azurerm_resource_group.rg.name
@@ -133,13 +142,15 @@ resource "azurerm_linux_virtual_machine" "web" {
   location            = azurerm_resource_group.rg.location
   size                = "Standard_F2"
   admin_username      = "adminuser"
+  custom_data = filebase64("${path.module}/init.sh")
+  network_interface_ids = [
+    azurerm_network_interface.nic.id
+  ]
+
   admin_ssh_key {
     username   = "adminuser"
     public_key = file("~/.ssh/hasan_rsa.pub")
   }
-  network_interface_ids = [
-    azurerm_network_interface.nic.id
-  ]
 
   os_disk {
     caching              = "ReadWrite"
@@ -152,8 +163,79 @@ resource "azurerm_linux_virtual_machine" "web" {
     sku       = "22_04-lts"
     version   = "latest"
   }
+
 }
 
+locals {
+  backend_address_pool_name      = "${azurerm_virtual_network.vnet.name}-beap"
+  frontend_port_name             = "${azurerm_virtual_network.vnet.name}-feport"
+  frontend_ip_configuration_name = "${azurerm_virtual_network.vnet.name}-feip"
+  http_setting_name              = "${azurerm_virtual_network.vnet.name}-be-htst"
+  listener_name                  = "${azurerm_virtual_network.vnet.name}-httplstn"
+  request_routing_rule_name      = "${azurerm_virtual_network.vnet.name}-rqrt"
+  redirect_configuration_name    = "${azurerm_virtual_network.vnet.name}-rdrcfg"
+}
+
+resource "azurerm_application_gateway" "main" {
+  name                = "appgw"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  sku {
+    name     = "WAF_v2"
+    tier     = "WAF_v2"
+    capacity = 2
+  }
+
+  gateway_ip_configuration {
+    name = "appgw-ip-config"
+    subnet_id = azurerm_subnet.appgw.id
+  }
+
+  frontend_ip_configuration {
+    name                 = local.frontend_port_name
+    public_ip_address_id = azurerm_public_ip.appgw.id
+  }
+
+  frontend_port {
+    name = local.frontend_port_name
+    port = 80
+  }
+
+  backend_address_pool {
+    name = local.backend_address_pool_name
+  }
+
+  backend_http_settings {
+    name = local.http_setting_name
+    cookie_based_affinity = "Disabled"
+    port = 80
+    protocol = "Http"
+    request_timeout = 60
+  }
+
+  http_listener {
+    name                           = local.listener_name
+    frontend_ip_configuration_name = local.frontend_ip_configuration_name
+    frontend_port_name             = local.frontend_port_name
+    protocol                       = "Http"
+  }
+
+  request_routing_rule {
+    name                       = local.request_routing_rule_name
+    rule_type                  = "Basic"
+    http_listener_name         = local.listener_name
+    backend_address_pool_name  = local.backend_address_pool_name
+    backend_http_settings_name = local.http_setting_name
+  }
+
+  waf_configuration {
+    enabled          = true
+    firewall_mode    = "Prevention"
+    rule_set_type    = "OWASP"
+    rule_set_version = "3.2"
+  }
+}
 
 output "firewall_url" {
   description = "Public URL to access the web server through Azure Firewall"

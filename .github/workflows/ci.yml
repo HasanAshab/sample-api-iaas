@@ -4,15 +4,13 @@ on:
     branches:
       - main
     paths:
-      - 'main.tf'
+      - '**/*.tf'
 
   pull_request:
     branches:
       - main
     paths:
-      - 'main.tf'
-
-  workflow_dispatch:
+      - '**/*.tf'
 
 jobs:
   lint:
@@ -24,27 +22,23 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
   
-      # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
-      - name: Terraform Init
+      - name: Initialize terraform project
         run: terraform init
-  
-      # Checks that all Terraform configuration files adhere to a canonical format
-      - name: Terraform Format
+
+      - name: Format terraform files
         run: terraform fmt -check 
-      
+
   validate:
     name: Validate Terraform
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
-  
-      # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
-      - name: Terraform Init
+
+      - name: Initialize terraform project
         run: terraform init
-  
-      # Checks that all Terraform configuration files adhere to a canonical format
+
       - name: Validate Terraform
-        run: terraform validate 
+        run: terraform validate

@@ -22,7 +22,7 @@ resource "azurerm_resource_group" "rg" {
 }
 
 resource "azurerm_public_ip" "firewall" {
-  name = "firewall-ip"
+  name                = "firewall-ip"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   allocation_method   = "Static"
@@ -44,15 +44,15 @@ resource "azurerm_subnet" "internal" {
 }
 
 resource "azurerm_firewall" "firewall" {
-  name = "firewall"
+  name                = "firewall"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  sku_name = "AZFW_VNet"
-  sku_tier = "Standard"
+  sku_name            = "AZFW_VNet"
+  sku_tier            = "Standard"
 
   ip_configuration {
-    name = "config"
-    subnet_id = azurerm_subnet.internal.id
+    name                 = "config"
+    subnet_id            = azurerm_subnet.internal.id
     public_ip_address_id = azurerm_public_ip.firewall.id
   }
 }
@@ -75,7 +75,7 @@ resource "azurerm_linux_virtual_machine" "web" {
   size                = "Standard_F2"
   admin_username      = "adminuser"
   admin_ssh_key {
-    username = "adminuser"
+    username   = "adminuser"
     public_key = file("~/.ssh/hasan_rsa.pub")
   }
   network_interface_ids = [

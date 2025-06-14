@@ -59,8 +59,8 @@ resource "azurerm_virtual_network" "vnet" {
   location            = azurerm_resource_group.rg.location
 }
 
-resource "azurerm_subnet" "internal" {
-  name                 = "internal"
+resource "azurerm_subnet" "nic" {
+  name                 = "nic"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.2.0/26"]
@@ -107,45 +107,13 @@ resource "azurerm_firewall" "default" {
   }
 }
 
-resource "azurerm_firewall_nat_rule_collection" "default" {
-  name = "firewall-web-rule-collection"
-  azure_firewall_name = azurerm_firewall.default.name
-  resource_group_name = azurerm_resource_group.rg.name
-  priority = 100
-  action = "Dnat"
-
-  rule {
-    name = "web-rule"
-    source_addresses = [ "*" ]
-    destination_ports = [ "4000" ]
-    destination_addresses = [ azurerm_public_ip.firewall.ip_address ]
-    translated_address = azurerm_linux_virtual_machine.web.private_ip_address
-    translated_port = "80"
-    protocols = [ "TCP" ]
-  }
-}
-
-resource "azurerm_network_interface" "nic" {
-  name                = "nic"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.internal.id
-    private_ip_address_allocation = "Dynamic"
-  }
-}
-
-resource "azurerm_linux_virtual_machine" "web" {
+resource "azurerm_linux_virtual_machine_scale_set" "web" {
   name                = "web"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  size                = "Standard_F2"
+  sku                = "Standard_F2"
   admin_username      = "adminuser"
   custom_data = filebase64("${path.module}/init.sh")
-  network_interface_ids = [
-    azurerm_network_interface.nic.id
-  ]
 
   admin_ssh_key {
     username   = "adminuser"
@@ -164,6 +132,16 @@ resource "azurerm_linux_virtual_machine" "web" {
     version   = "latest"
   }
 
+  network_interface {
+    name    = "nic"
+    primary = true
+
+    ip_configuration {
+      name                          = "web-ip-config"
+      subnet_id                     = azurerm_subnet.nic.id
+      private_ip_address_allocation = "Dynamic"
+    }
+  }
 }
 
 locals {
@@ -237,7 +215,7 @@ resource "azurerm_application_gateway" "main" {
   }
 }
 
-output "firewall_url" {
-  description = "Public URL to access the web server through Azure Firewall"
-  value       = format("http://%s:%s", azurerm_public_ip.firewall.ip_address, "4000")
+output "app_getway_addr" {
+  description = "Public URL to access the web server"
+  value       = format("http://%s:%s", azurerm_public_ip.appgw.ip_address, "80")
 }

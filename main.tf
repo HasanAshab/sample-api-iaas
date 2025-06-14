@@ -29,6 +29,14 @@ resource "azurerm_public_ip" "firewall" {
   sku                 = "Standard"
 }
 
+resource "azurerm_public_ip" "management" {
+  name                = "management-ip"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
 resource "azurerm_virtual_network" "vnet" {
   name                = "vnet"
   address_space       = ["10.0.0.0/21"]
@@ -43,18 +51,37 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = ["10.0.2.0/24"]
 }
 
+resource "azurerm_subnet" "firewall" {
+  name                 = "firewall-subnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.2.0/26"]
+}
+
 resource "azurerm_firewall" "firewall" {
   name                = "firewall"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   sku_name            = "AZFW_VNet"
-  sku_tier            = "Standard"
+  sku_tier            = "Basic"
 
   ip_configuration {
     name                 = "config"
-    subnet_id            = azurerm_subnet.internal.id
+    subnet_id            = azurerm_subnet.firewall.id
     public_ip_address_id = azurerm_public_ip.firewall.id
   }
+
+  management_ip_configuration {
+    name                 = "management"
+    subnet_id            = azurerm_subnet.firewall.id
+    public_ip_address_id = azurerm_public_ip.management.id
+  }
+}
+
+resource "azurerm_firewall_policy" "example" {
+  name                = "firewall-policy"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
 }
 
 resource "azurerm_network_interface" "nic" {

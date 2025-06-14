@@ -55,21 +55,21 @@ resource "azurerm_subnet" "internal" {
   name                 = "internal"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.2.64/26"]
+  address_prefixes     = ["10.0.2.0/26"]
 }
 
 resource "azurerm_subnet" "firewall" {
   name                 = "AzureFirewallSubnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.2.0/26"]
+  address_prefixes     = ["10.0.2.64/26"]
 }
 
 resource "azurerm_subnet" "management" {
   name                 = "AzureFirewallManagementSubnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.2.0/26"]
+  address_prefixes     = ["10.0.2.128/26"]
 }
 
 resource "azurerm_firewall" "default" {
